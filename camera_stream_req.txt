@@ -1,0 +1,5 @@
+aiortc
+opencv-python
+python-dotenv
+av
+requests

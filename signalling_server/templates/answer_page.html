@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast API webRTC Answering page</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+
+
+</head>
+<body>
+    <center>
+        <h1>
+            FAST API WEB RTC ANSWER
+        </h1>
+    </center>
+
+    <select name="selection" id="options">
+        {% for i in options %} 
+        <option value="{{ i }}"> {{ i }}</option>
+        {% endfor %}
+    </select>
+    
+    <button id = "answer_button" class="btn btn-primary">Answer</button>
+
+    <hr>
+    Chat:
+    <br>
+    <div id="chatlog" style="height:200px; overflow:auto; border:1px solid"></div>
+    <br>
+    <input type="text" id="messageTextBox" placeholder="Type your message here">
+    <button id="sendMessageBtn" onclick="sendMessage()">Send message</button>
+    </center>
+    
+    
+    
+    <script>
+
+        var cfg = {iceServers: [
+              {
+                urls: "stun:______________________",
+              },
+              {
+                urls: "turn:_____________________",
+                username: "_________________________",
+                credential: "_________________________",
+              },
+              {
+                urls: "turn:___________________________",
+                username: "_________________________",
+                credential: "_________________________",
+              },
+              {
+                urls: "turn:___________________________",
+                username: "_________________________",
+                credential: "_________________________",
+              },
+              {
+                urls: "turn:____________________________________",
+                username: "_________________________",
+                credential: "_________________________",
+              },
+          ],
+        };
+
+        var cfg2 = { iceServers: [{urls: "stun:stun.l.google.com:19302"}]}
+        con = { 'optional': [{'DtlsSrtpKeyAgreement': true}] }
+        
+        var pc2 = new RTCPeerConnection(cfg2, con), dc1 = null, tn1 = null, activedc, pc1icedone = false;
+        
+        
+        let selected_option = '';
+
+        pc2.ondatachannel = function (e) {
+            var datachannel = e.channel || e;
+            dc2 = datachannel
+            activedc = dc2
+            dc2.onopen = function (e) { 
+              chatlog.innerHTML += "User connected </p>";
+            }
+            dc2.onmessage = function (e) {
+              if (e.data.size) {
+                fileReceiver2.receive(e.data, {})
+              } else {
+                var data = JSON.parse(e.data)
+                if (data.type === 'file') {
+                  fileReceiver2.receive(e.data, {})
+                } else {
+                  chatlog.innerHTML += '[' + new Date() + '] ' + data.message + '</p>';
+                  chatlog.scrollTop = chatlog.scrollHeight;
+                }
+              }
+            }
+            dc1.onclose = function(e) {
+              chatlog.innerHTML += "User Disconnected </p>"
+            }
+          }
+          
+        pc2.onicecandidate = function (e) {
+            if (e.candidate == null) {
+                console.log(JSON.stringify(pc2.localDescription));
+                let url = window.location.origin +'/answer_data/';
+                let params = {
+                    user_name : selected_option,
+                    answer : JSON.stringify(pc2.localDescription)
+                };
+
+                sendParams(url,params);
+                chatlog.innerHTML += 'Send answer to ' + selected_option + '</p>'
+
+            }
+        }
+    
+        
+        
+        function sendParams(url, params) {
+            console.log('Sending Data')
+            const urlSearchParams = new URLSearchParams(params);
+            const fullUrl = `${url}?${urlSearchParams.toString()}`;
+            fetch(fullUrl, {
+                method: 'POST',
+            })
+            .then(response => response.json()) // Parse the response as JSON
+            .then(data => console.log(data)) // Do something with the data
+            .catch(error => console.error(error)); // Handle any errors
+        }
+
+        var sdpConstraints = {
+        optional: [],
+        }
+
+
+        const offers_url = '{{ url_for ("get_offers")}}'
+        answer_button.onclick = async function() {
+
+            selected_option = document.getElementById('options').value;
+            try {
+
+                let check_url = offers_url + '/' + selected_option;
+                let response = await fetch(check_url);
+                console.log(response);
+                let data = await response.json();
+                console.log(data);
+                if (data.success == true){
+                    let offer = new RTCSessionDescription(JSON.parse(data.offer));
+                    pc2.setRemoteDescription(offer);
+                    pc2.createAnswer(function(answerDesc) {
+                        pc2.setLocalDescription(answerDesc)
+                      },
+                      function () { },
+                      sdpConstraints)
+                }
+
+            } catch (error) {
+
+                console.error(error);
+            }
+        } 
+
+        function sendMessage () {
+            if (messageTextBox.value) {
+              activedc.send(JSON.stringify({message: messageTextBox.value}));
+              chatlog.innerHTML += '[' + new Date() + '] ' + messageTextBox.value + '</p>';
+              messageTextBox.value = "";
+            }
+            return false
+        }
+        
+    </script>
+</body>
+</html>
